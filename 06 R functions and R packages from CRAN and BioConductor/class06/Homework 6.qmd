@@ -1,0 +1,195 @@
+---
+title: "Homework 6"
+author: "Steven Gan"
+format: pdf
+date: 2022-10-16
+toc: true
+theme:
+  light: faltly
+  dark: darkly
+---
+
+# Section 1
+
+## A
+
+```{r}
+df <- data.frame(a = 1:10, b = seq(200, 400, length = 10),c = 11:20, d = NA)
+df
+
+a <- function(x) {
+  x <- (x - min(x)) / (max(x) - min(x))
+}
+
+df <- apply(df, 2, a)
+df
+```
+
+## B
+
+```{r}
+# Output the Bfactor of a protein by inputing its PDB ID
+b_factor <- function(pdb, plot = TRUE){
+  if(!requireNamespace("bio3d", quietly = TRUE))
+  install.packages("bio3d")
+  library(bio3d)
+  
+  s <- read.pdb(pdb)
+  s.chainA <- trim.pdb(s, chain = "A", elety = "CA")
+  s.b <- s.chainA$atom$b
+  
+  if (plot == TRUE){plotb3(s.b, sse = s.chainA, typ = "l", ylab = "Bfactor")}
+  return(s.b)
+}
+
+s.b <- apply(as.data.frame(c("4AKE", "1AKE", "1E4Y")), 1, b_factor)
+
+# Hierarchical cluster analysis
+hc <- hclust(dist(t(s.b)))
+plot(hc)
+```
+
+Q1: 
+
+A list with 8 elements is returned from the read.pdb()
+
+Q2:
+
+trim.pdb() trim residues and filter the structures from a pdb object to a new pdb object.
+In this case, it select the C-alpha atoms from the chain A of the protein.
+
+Q3:
+
+Delete the sse argument will turn off the marginal black and grey rectangules.
+sse indicates the secondary structure object, in this case, the the chain A of the protein.
+
+Q4:
+
+To compare the similarity between proteins, the intuitive way would be superposite the strucutre of two proteins and label the physical distance between two structures. Hierarchical cluster analysis is also a way to plot the phylogenetic tree of proteins.
+
+Q5:
+
+Protein 1AKE and 1E4Y exhibit higher similarity with each other.
+
+The analysis was performed based on measuring the distance matrix between proteins and followed by hierarchical cluster analysis.
+
+Q6:
+
+```{r}
+#Input PBD of proteins and plot the Hierarchical cluster analysis result
+hc_pdbs <- function(pdbs){
+  pdbs <- as.data.frame(pdbs)
+  s.b <- apply(pdbs, 1, b_factor, plot = FALSE)
+  hc <- hclust(dist(t(s.b)))
+  plot(hc)
+}
+
+hc_pdbs(c("4AKE", "1AKE", "1E4Y"))
+```
+
+# Section 2
+
+```{r}
+square.it <- function(x) {
+ square <- x * x
+ return(square)
+}
+
+# square a number
+square.it(5)
+# square a vector
+square.it(c(1, 4, 2))
+# square a character (not going to happen)
+#square.it("hi")
+#Error in x * x : non-numeric argument to binary operator
+
+matrix1 <- cbind(c(3, 10), c(4, 5))
+square.it(matrix1)
+
+fun1 <- function(x) {3 * x - 1}
+fun1(5)
+
+fun2 <- function(x) {y <- 3 * x - 1}
+fun2(5)
+```
+
+# Section 3
+
+```{r}
+my.fun <- function(x.matrix, y.vec, z.scalar) {
+ # use my previous function square.it() and save result
+ sq.scalar <- square.it(z.scalar)
+ # multiply the matrix by the vector using %*% operator
+ mult <- x.matrix %*% y.vec
+ # multiply the resulting objects together to get a final ans
+ final <- mult * sq.scalar
+ # return the result
+ return(final)
+}
+
+# save a matrix and a vector object
+my.mat <- cbind(c(1, 3, 4), c(5, 4, 3))
+my.vec <- c(4, 3)
+# pass my.mat and my.vec into the my.fun function
+my.fun(my.mat, my.vec, 9)
+
+#Returning a list of objects
+another.fun <- function(sq.matrix, vector) {
+ # transpose matrix and square the vector
+ step1 <- t(sq.matrix)
+ step2 <- vector * vector
+ # save both results in a list and return
+ final <- list(step1, step2)
+ return(final)
+}
+# call the function and save result in object called outcome
+outcome <- another.fun(sq.matrix = cbind(c(1, 2), c(3, 4)), vector = c(2, 3))
+# print the outcome list
+print(outcome)
+
+# extract first in list
+outcome[[1]]
+
+# extract second in list
+outcome[[2]]
+```
+
+# Section 4
+
+```{r}
+my.fun <- function(x.matrix, y.vec, z.scalar) {
+ print("xmatrix")
+ print(x.matrix)
+ print("yvec")
+ print(y.vec)
+ print("Dimensions")
+ print(dim(x.matrix))
+ print(length(y.vec))
+ # use previous function square.it() and save result
+ sq.scalar <- square.it(z.scalar)
+ print(paste("sq.scalar=", sq.scalar))
+ # multiply the matrix by the vector using %*% operator
+ mult <- x.matrix %*% y.vec
+ # multiply the two resulting objects
+ final <- mult * sq.scalar
+ # return the result
+ return(final)
+}
+#my.fun(my.mat, c(2, 3, 6, 4, 1), 9)
+
+my.second.fun <- function(matrix, vector) {
+ if (dim(matrix)[2] != length(vector)) {
+ stop("Can't multiply matrix%*%vector because the
+dimensions are wrong")
+ }
+ product <- matrix %*% vector
+ return(product)
+}
+# function works when dimensions are right
+my.second.fun(my.mat, c(6, 5))
+
+# function call triggered error
+# my.second.fun(my.mat, c(6, 5, 7))
+# Error in my.second.fun(my.mat, c(6, 5, 7)) : Can't multiply matrix%*%vector because the dimensions are wrong
+
+```

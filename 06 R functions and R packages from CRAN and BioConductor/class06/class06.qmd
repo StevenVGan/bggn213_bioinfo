@@ -1,0 +1,99 @@
+---
+title: "class06"
+author: "Steven Gan"
+format: html
+date: 2022-10-14
+toc: true
+theme:
+  light: faltly
+  dark: darkly
+---
+
+# Input the Student Grade Sheet
+```{r}
+student_grade <- read.csv(file = 'https://tinyurl.com/gradeinput', row.names = 1)
+student_grade[is.na(student_grade)] <- 0
+```
+
+# Q1
+
+```{r}
+grade <- function (student) {
+  student[is.na(student)] <- 0
+  sort <- sort(student, na.last = FALSE)
+  return(mean(sort[-1]))
+}
+
+
+overall_stu <- apply(student_grade, 1, grade)
+overall_stu
+```
+
+# Q2
+
+```{r}
+names(sort(overall_stu, decreasing = TRUE)[1])
+```
+
+# Q3
+
+```{r}
+overall_hw <- apply(student_grade, 2, grade)
+names(sort(overall_hw)[1])
+```
+
+# Q4
+
+## Method 1
+y = x correlation
+```{r}
+#Calculate the deviation in terms of the physical distances between student grades in each homework with their overall grades
+diff <- (student_grade - overall_stu) ^ 2
+dev <- sqrt(colSums(diff) / (ncol(diff) - 1))
+names(sort(dev)[1])
+```
+
+## Method 2
+y = ax + b correlation
+```{r}
+#Calculate the correlation coefficient by Pearson method (correlation based on linearity)
+cor <- apply(student_grade, 2, cor, y = overall_stu)
+names(sort(cor, decreasing = TRUE)[1])
+```
+
+## Comparing two methods
+
+```{r}
+library(ggplot2)
+library(patchwork)
+
+com_grade <- cbind(student_grade, overall_stu)
+
+#Student-15's score in homework 5 is removed (Score = 0)
+scale1 = c(75, 100)
+scale2 = c(60, 100)
+
+p1 <- ggplot(com_grade) + 
+  aes(x = overall_stu, y = hw1) + 
+  geom_point() + 
+  geom_smooth(method = "lm") +
+  labs(x = "Overall Student Grades", y = "Homework 1", 
+       title = "Method 1 Correlation") +
+  geom_abline(intercept = 0, slope = 1, 
+              color = "red", linetype = "dashed", size = 0.5) +
+  scale_x_continuous(limits = scale1) + 
+  scale_y_continuous(limits = scale1)
+
+p2 <- ggplot(com_grade) + 
+  aes(x = overall_stu, y = hw5) + 
+  geom_point() + 
+  geom_smooth(method = "lm") +
+  labs(x = "Overall Student Grades", y = "Homework 5", 
+       title = "Method 2 Correlation") +
+  geom_abline(intercept = 0, slope = 1, 
+              color = "red", linetype = "dashed", size = 0.5) +
+  scale_x_continuous(limits = scale2) + 
+  scale_y_continuous(limits = scale2)
+
+p1 | p2
+```

@@ -1,0 +1,24 @@
+---
+title: "class16"
+author: "StevenGan"
+format: html
+---
+
+# 4. Connecting RStudio to GitHub
+
+## Create a Personal Access Token (PAT) on GitHub
+
+```{r}
+# install.packages("usethis")
+# library(usethis)
+create_github_token()
+```
+
+## Store Personal Access Token to Connect RStudio and GitHub
+
+```{r}
+# install.packages("gitcreds")
+library(gitcreds)
+gitcreds_set()
+```
+

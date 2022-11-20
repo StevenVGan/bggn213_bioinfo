@@ -1,0 +1,231 @@
+---
+title: "class07"
+author: "Steven Gan"
+format: pdf
+date: 2022-10-19
+toc: true
+theme:
+  light: faltly
+  dark: darkly
+---
+
+\newpage
+
+# K-means Cluster
+
+```{r}
+tmp <- c(rnorm(30, -3), rnorm(30, 3))
+tmp <- cbind(x = tmp, y = rev(tmp))
+
+plot(tmp)
+```
+
+```{r}
+km2 <- kmeans(tmp, centers = 2, nstart = 20)
+
+km2$size
+
+sum(km2$cluster == 1)
+sum(km2$cluster == 2)
+
+plot(tmp, col = km2$cluster + 1)
+points(km2$centers, col = "blue", pch = 15, cex = 2)
+```
+
+```{r}
+km4 <- kmeans(tmp, centers = 3, nstart = 20)
+plot(tmp, col = km4$cluster)
+points(km4$centers, col = "blue", pch = 15, cex = 2)
+```
+
+# Hierachical Cluster
+
+```{r}
+hc <- hclust(dist(tmp))
+hc
+plot(hc)
+abline(h = 6, col = "red")
+cutree(hc, k = 2)
+
+plot(tmp, col = cutree(hc, k = 2))
+```
+
+```{r}
+hc <- hclust(dist(tmp), "average")
+plot(tmp, col = cutree(hc, k = 3))
+```
+
+# Principal Component Analysis (PCA)
+
+## PCA of UK food data
+
+### Data import
+```{r}
+url <- "https://tinyurl.com/UK-foods"
+x <- read.csv(url)
+```
+
+### Checking your data
+
+Q1:
+17 rows and 5 columns
+dim()
+
+Q2:
+row.names = 1 is more preferred as it's more elegant in coding.
+However, the dirst method is more robust and contains more freedom fo adjustment based on personal requirements.
+
+```{r}
+dim(x)
+head(x)
+
+rownames(x) <- x[,1]
+x <- x[,-1]
+# x <- read.csv("https://tinyurl.com/UK-foods", row.names = 1)
+dim(x)
+head(x)
+```
+
+### Spotting major differences and trends
+
+Q3: 
+Changing the beside argument from TRUE to FALSE
+
+Q5:
+Each plot means the pairwise relations between the corresponding regions. For a point lies on the diagonal of a plot, it means that type of food consumption are the same in that two corresponding regions.
+
+Q6:
+N.Ireland exhibits relatively different food consumption patterns in comparing to other regions, which exhibit similar food consumption patterns.
+
+```{r}
+barplot(as.matrix(x), beside = T, col = rainbow(nrow(x)))
+
+barplot(as.matrix(x), beside = F, col = rainbow(nrow(x)))
+
+
+pairs(x, col = rainbow(10), pch = 16)
+```
+
+### PCA to the rescue
+
+Q7:
+As below
+
+Q8:
+As below
+
+```{r}
+# Transpose!
+pca <- prcomp(t(x))
+summary(pca)
+
+plot(pca$x[,1], pca$x[,2], xlab="PC1", ylab="PC2", xlim=c(-270,500)) 
+text(pca$x[,1], pca$x[,2], colnames(x), col = c("orange", "pink", "blue", "green"))
+```
+
+```{r}
+v <- round(pca$sdev^2/sum(pca$sdev^2) * 100)
+v
+
+z <- summary(pca)
+z$importance
+
+barplot(v, xlab = "Principal Component", ylab = "Percent Variation")
+```
+
+### Digging deeper
+
+```{r}
+par(mar = c(10, 3, 0.35, 0))
+barplot(pca$rotation[,1], las = 2)
+```
+Q9:
+As below
+Fresh potatoes and soft drinks dominate. The PC2 mainly tells how the three sets: Wales, England and N.Ireland, and Scotland distinguish each others in the food consumption patterns. Fresh potatoes push the Wales away while soft drinks push Scotland away.
+
+```{r}
+par(mar = c(10, 3, 0.35, 0))
+barplot(pca$rotation[,2], las = 2)
+```
+
+```{r}
+## The inbuilt biplot() can be useful for small datasets 
+biplot(pca)
+```
+
+## PCA of RNA-seq data
+
+Q10:
+100 genes and 10 samples are in this data set
+
+```{r}
+url2 <- "https://tinyurl.com/expression-CSV"
+rna.data <- read.csv(url2, row.names = 1)
+head(rna.data)
+dim(rna.data)
+```
+
+```{r}
+# Transpose!
+pca.rna <- prcomp(t(rna.data), scale = TRUE)
+plot(pca.rna$x[,1], pca.rna$x[,2], xlab = "PC1", ylab = "PC2")
+```
+
+```{r}
+summary(pca.rna)
+
+# plot(pca.rna, main = "Quick scree plot")
+v.rna <- round(pca.rna$sdev ^ 2 / sum(pca.rna$sdev ^ 2) *100)
+barplot(v.rna, xlab = "Principal Component", ylab = "Percent Variation")
+barplot(v.rna, main = "Scree Plot", 
+        names.arg = paste0("PC", 1:10),
+        xlab = "Principal Component", ylab = "Percent Variation")
+```
+
+```{r}
+colvec <- colnames(rna.data)
+colvec[grep("wt", colvec)] <- "red"
+colvec[grep("ko", colvec)] <- "blue"
+
+plot(pca.rna$x[,1], pca.rna$x[,2], col = colvec, pch = 16,
+     xlab = paste0("PC1 (", v.rna[1], "%)"),
+     ylab = paste0("PC2 (", v.rna[2], "%)"))
+text(pca.rna$x[,1], pca.rna$x[,2], labels = colnames(rna.data), pos = c(rep(4,5), rep(2,5)))
+```
+
+#### Using ggplot2
+
+```{r}
+library(ggplot2)
+
+df <- as.data.frame(pca.rna$x)
+
+ggplot(df) + 
+  aes(PC1, PC2) + 
+  geom_point()
+```
+
+```{r}
+df$samples <- colnames(rna.data)
+df$condition <- substr(colnames(rna.data), 1, 2)
+
+p <- ggplot(df) + 
+        aes(PC1, PC2, label = samples, col = condition) + 
+        geom_label(show.legend = FALSE)
+
+p + labs(title = "PCA of RNASeq Data",
+       subtitle = "PC1 clealy seperates wild-type from knock-out samples",
+       x = paste0("PC1 (", v.rna[1], "%)"),
+       y = paste0("PC2 (", v.rna[2], "%)"),
+       caption = "Class example data") +
+     theme_bw()
+```
+
+#### Optional: gene loadings
+
+```{r}
+gene_scores <- abs(pca.rna$rotation[,1]) 
+gene_score_ranked <- sort(gene_scores, decreasing = TRUE)
+
+names(gene_score_ranked[1:10])
+```

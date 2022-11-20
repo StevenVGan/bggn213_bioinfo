@@ -1,0 +1,63 @@
+---
+title: "class11"
+author: "Steven Gan"
+format: pdf
+toc: true
+date: 2022-11-02
+theme:
+  light: faltly
+  dark: darkly
+---
+
+# Section 1. Proportion of G/G in a population
+
+```{r}
+mxl <- read.csv("373531-SampleGenotypes-Homo_sapiens_Variation_Sample_rs8067378.csv",
+                row.names = 1)
+head(mxl)
+```
+
+```{r} 
+table(mxl$Genotype..forward.strand.) / nrow(mxl) * 100
+```
+
+# Section 4. Population Scale Analysis
+
+```{r}
+expr <- read.table(file = "https://bioboot.github.io/bggn213_W19/class-material/rs8067378_ENSG00000172057.6.txt")
+row.names(expr) = expr$sample
+expr <- expr[-1]
+```
+
+Q13:
+
+```{r}
+table(expr$geno)
+
+library(dplyr)
+
+expr %>%
+  group_by(geno) %>%
+  summarise(Mean = mean(exp), Median = median(exp), Std = sd(exp))
+```
+
+Q14:
+
+```{r}
+library(ggplot2)
+
+p <- ggplot(expr) + aes(geno, exp, fill = geno) + 
+  geom_boxplot(notch = T) +
+  geom_jitter(alpha = 0.2, width = 0.2) +
+  labs(x = "Genotype", y = "Expression")
+```
+
+```{r}
+# install.packages("ggpubr")
+library(ggpubr)
+
+compare_means(exp ~ geno,  data = expr)
+
+comp <- list(c("A/A", "A/G"), c("A/G", "G/G"), c("A/A", "G/G"))
+p + stat_compare_means(comparisons = comp)
+```

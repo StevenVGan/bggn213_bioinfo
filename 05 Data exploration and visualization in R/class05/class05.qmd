@@ -1,0 +1,186 @@
+---
+title: "class05"
+author: "Steven Gan"
+format: pdf
+---
+
+# Our first plot
+
+```{r}
+head(cars, 2)
+plot(cars)
+```
+
+How would I plot this with `ggplot2` ?
+
+
+```{r}
+#install.package("ggplot2")
+library(ggplot2)
+ggplot(cars) + aes(x = speed, y = dist) + geom_point()
+
+ggplot(cars) + aes(x = speed, y = dist) + geom_line()
+
+ggplot(cars) + aes(y = dist) + geom_histogram(binwidth = 20)
+
+ggplot(cars) + aes(x = speed, y = dist) + geom_point() + geom_smooth(method = "lm") +
+  labs(x = "Speed (MPH)", y = "Stop Distance (ft)",
+       title = "Speed v.s. Stop Distance of Cars",
+       subtitle = "Steven Gan",
+       captions = "Dataset: Cars") + theme_bw()
+
+?geom_smooth
+```
+
+Every ggplot needs at least 3 layars:
+
+-   **Data**
+-   **Aes**
+-   **Geoms**
+
+
+# Creating Scatter Plots
+
+```{r}
+url <- "https://bioboot.github.io/bimm143_S20/class-material/up_down_expression.txt"
+genes <- read.delim(url)
+head(genes)
+
+nrow(genes)
+colnames(genes)
+ncol(genes)
+
+States <- table(genes$State)
+
+num_upgene = sum(genes$State == "up") / nrow(genes)
+num_upgene
+
+ggplot(genes) + aes(x = Condition1, y = Condition2) + geom_point()
+
+p <- ggplot(genes) +
+  aes(x = Condition1, y = Condition2, col = State) +
+  geom_point()
+p + scale_colour_manual(values = c("blue","gray","red")) +
+  labs(x = "Control (no drug)", y = "Drug Treatment",
+       title = "Gene Expression Changes Upon Drug Treatment")
+```
+
+# Going Further
+
+```{r}
+#install.packages("gapminder")
+library(gapminder)
+
+url <- "https://raw.githubusercontent.com/jennybc/gapminder/master/inst/extdata/gapminder.tsv"
+gapminder <- read.delim(url)
+
+#install.package("dplyr")
+library(dplyr)
+
+gapminder_2007 <- gapminder[gapminder$year == "2007",]
+## rownames(gapminder_2007) <- NULL
+rownames(gapminder_2007) <- 1:nrow(gapminder_2007)
+
+gapminder_2007_2 <- gapminder %>% filter(year==2007)
+
+identical(gapminder_2007, gapminder_2007_2)
+
+ggplot(gapminder_2007) +
+  aes(x = gdpPercap, y = lifeExp, color = continent, size = pop) +
+  geom_point(alpha = 0.5) +
+  scale_size_area(max_size = 10)
+
+gapminder_0757 <- gapminder %>% filter(year == 2007 | year == 1957)
+
+ggplot(gapminder_0757) +
+  aes(x = gdpPercap, y = lifeExp, color = continent, size = pop) +
+  geom_point(alpha = 0.5) +
+  scale_size_area(max_size = 10) +
+  facet_wrap(~ year)
+```
+
+#OPTIONAL: Bar Chart
+
+```{r}
+gapminder_top5 <- gapminder %>% 
+  filter(year == 2007) %>% 
+  arrange(desc(pop)) %>% 
+  top_n(5, pop)
+
+t <- top_n(arrange(filter(gapminder, year == 2007), desc(pop)), 5, pop)
+
+identical(gapminder_top5, t)
+
+ggplot(gapminder_top5) +
+  aes(x = country, y = pop, fill = continent) + 
+  geom_col()
+
+ggplot(gapminder_top5) +
+  aes(x = country, y = lifeExp) + 
+  geom_col()
+
+ggplot(gapminder_top5) + 
+  aes(x = country, y = pop, fill = lifeExp) +
+  geom_col()
+
+ggplot(gapminder_top5) +
+  aes(x = country, y = pop, fill = gdpPercap) +
+  geom_col()
+
+ggplot(gapminder_top5) +
+  aes(x = reorder(country, - pop), y = pop, fill = gdpPercap) +
+  geom_col()
+
+ggplot(gapminder_top5) +
+  aes(x = reorder(country, - pop), y = pop, fill = country) +
+  geom_col(col = "gray30") +
+  guides(fill = "none")
+
+head(USArrests)
+USArrests$State <- rownames(USArrests)
+ggplot(USArrests) +
+  aes(x = reorder(State, Murder), y = Murder) +
+  geom_point() +
+  geom_segment(aes(x = State, xend = State, 
+                   y=0, yend=Murder), color="blue") +
+  coord_flip()
+```
+
+# Extensions: Animation
+```{r}
+#install.packages("gifski")
+#install.packages("gganimate")
+library("gifski")
+library("gganimate")
+
+ggplot(gapminder, aes(gdpPercap, lifeExp, size = pop, colour = country)) +
+  geom_point(alpha = 0.7, show.legend = FALSE) +
+  scale_color_manual(values = country_colors) +
+  scale_size(range = c(2, 12)) +
+  scale_x_log10() +
+  # Facet by continent
+  facet_wrap(~continent) +
+  # Here comes the gganimate specific bits
+  labs(title = 'Year: {frame_time}', x = 'GDP per capita', y = 'life expectancy') #+
+  #transition_time(year) +
+  #shadow_wake(wake_length = 0.1, alpha = FALSE)
+
+
+```
+
+# Combining plots
+
+```{r}
+#install.packages("patchwork")
+library(patchwork)
+
+# Setup some example plots 
+p1 <- ggplot(mtcars) + geom_point(aes(mpg, disp))
+p2 <- ggplot(mtcars) + geom_boxplot(aes(gear, disp, group = gear))
+p3 <- ggplot(mtcars) + geom_smooth(aes(disp, qsec))
+p4 <- ggplot(mtcars) + geom_bar(aes(carb))
+
+# Use patchwork to combine them here:
+(p1 | p2 | p3) /
+      p4
+```

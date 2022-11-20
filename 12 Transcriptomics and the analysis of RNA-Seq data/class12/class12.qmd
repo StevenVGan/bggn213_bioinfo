@@ -1,0 +1,279 @@
+---
+title: "class12"
+author: "Steven Gan"
+format: html
+toc: true
+date: 2022-11-04
+theme:
+  light: faltly
+  dark: darkly
+---
+
+# 1. Bioconductor and DESeq2 setup
+
+```{r, message = F}
+# install.packages("BiocManager")
+# BiocManager::install()
+
+# BiocManager::install("DESeq2")
+
+library(BiocManager)
+library(DESeq2)
+```
+
+# 2. Import countData and colData
+
+```{r}
+counts <- read.csv("airway_scaledcounts.csv", row.names=1)
+metadata <-  read.csv("airway_metadata.csv")
+```
+
+Q1:
+
+```{r}
+nrow(counts)
+```
+
+Q2:
+
+```{r}
+table(metadata$dex)
+```
+
+# 3. Toy differential gene expression
+
+Q3 & Q4:
+
+```{r, message = F}
+library(dplyr)
+
+ctrl <- metadata %>% filter(dex == "control")
+ctrl.mean <- counts %>% 
+  select(ctrl$id) %>%
+  rowMeans()
+
+treat <- metadata %>% filter(dex == "treated")
+treat.mean <- counts %>% 
+  select(treat$id) %>%
+  rowMeans()
+
+meancounts <- data.frame(ctrl.mean, treat.mean)
+```
+
+Q5 (a):
+
+```{r}
+plot(meancounts)
+```
+
+Q5 (b):
+
+```{r}
+library(ggplot2)
+
+ggplot(meancounts) + 
+  aes(x = ctrl.mean, y = treat.mean) +
+  geom_point()
+```
+
+Q6:
+
+```{r}
+plot(meancounts + 1, log = "xy")
+
+ggplot(meancounts + 1) +
+  aes(x = ctrl.mean, y = treat.mean) +
+  geom_point() +
+  scale_x_continuous(trans = "log2") +
+  scale_y_continuous(trans = "log2")
+```
+
+```{r}
+meancounts$log2fc <- log2(meancounts[,"treat.mean"] / meancounts[,"ctrl.mean"])
+
+zero.vals <- which(meancounts[,1:2] == 0, arr.ind = T)
+to.rm <- unique(zero.vals[,1])
+mycounts <- meancounts[-to.rm,]
+
+mycounts2 <- meancounts[meancounts$ctrl.mean != 0 & meancounts$treat.mean != 0,]
+identical(mycounts, mycounts2)
+```
+
+Q7: The first column is the row indices of rows with 0. Since it could be possible that both ctrl and treat mean contains 0, row indices might be count for two times. Unique can get rid of the duplicates.
+
+
+Q8 & 9:
+
+```{r}
+up.ind <- mycounts$log2fc > 2
+down.ind <- mycounts$log2fc < -2
+
+sum(up.ind)
+sum(down.ind)
+```
+
+Q10:
+
+Not completely trustworthy, as the significany are not evaluated.
+
+# 4. DESeq2 analysis
+
+```{r}
+dds <- DESeqDataSetFromMatrix(countData = counts, 
+                              colData = metadata, 
+                              design = ~dex)
+dds
+```
+
+```{r}
+dds <- DESeq(dds)
+dds
+res <- results(dds)
+summary(res)
+```
+
+```{r}
+res05 <- results(dds, alpha = 0.05)
+summary(res05)
+
+```
+
+# 5. Adding annotation data
+
+Q11: 
+
+```{r, message = F}
+# BiocManager::install("AnnotationDbi")
+# BiocManager::install("org.Hs.eg.db")
+
+library("AnnotationDbi")
+library("org.Hs.eg.db")
+
+res$symbol <- mapIds(org.Hs.eg.db,
+                     keys = row.names(res),
+                     keytype = "ENSEMBL",
+                     column = "SYMBOL",
+                     multiVals = "first")
+
+res$entrez <- mapIds(org.Hs.eg.db,
+                     keys = row.names(res),
+                     keytype = "ENSEMBL",
+                     column = "ENTREZID",
+                     multiVals = "first")
+
+res$uniprot <- mapIds(org.Hs.eg.db,
+                     keys = row.names(res),
+                     keytype = "ENSEMBL",
+                     column = "UNIPROT",
+                     multiVals = "first")
+
+res$genename <- mapIds(org.Hs.eg.db,
+                     keys = row.names(res),
+                     keytype = "ENSEMBL",
+                     column = "GENENAME",
+                     multiVals = "first")
+
+head(res)
+```
+
+```{r}
+ord <- order(res$padj)
+write.csv(res[ord,], "deseq_results.csv")
+```
+
+# 6. Data Visualization
+
+```{r}
+plot(res$log2FoldChange, -log(res$padj), 
+     xlab = "Log2(FoldChange)",
+     ylab = "-Log(P-value)")
+
+abline(v = c(-2, 2), col = "red")
+abline(h = -log(0.05), col = "darkgray", lty = 2)
+```
+
+```{r fig1, fig.height = 4, fig.width = 5}
+# BiocManager::install("EnhancedVolcano")
+library(EnhancedVolcano)
+
+x <- as.data.frame(res)
+
+EnhancedVolcano(x,
+    lab = x$symbol,
+    x = 'log2FoldChange',
+    y = 'pvalue')
+```
+
+# 7. Pathway analysis
+
+```{r, message = F}
+# BiocManager::install( c("pathview", "gage", "gageData") )
+library(pathview)
+library(gage)
+library(gageData)
+```
+
+```{r}
+data(kegg.sets.hs)
+
+head(kegg.sets.hs, 2)
+```
+
+
+```{r}
+foldchanges = res$log2FoldChange
+names(foldchanges) = res$entrez
+head(foldchanges)
+```
+
+```{r}
+keggres = gage(foldchanges, gsets = kegg.sets.hs)
+```
+
+```{r}
+attributes(keggres)
+```
+
+```{r}
+head(keggres$less, 3)
+```
+
+```{r}
+pathview(gene.data = foldchanges, pathway.id = "hsa05310")
+```
+
+```{r}
+pathview(gene.data = foldchanges, pathway.id = "hsa05310", kegg.native = FALSE)
+```
+
+Q12:
+
+```{r}
+pathview(gene.data = foldchanges, pathway.id = "hsa05332")
+pathview(gene.data = foldchanges, pathway.id = "hsa05332", kegg.native = FALSE)
+
+pathview(gene.data = foldchanges, pathway.id = "hsa04940")
+pathview(gene.data = foldchanges, pathway.id = "hsa04940", kegg.native = FALSE)
+```
+
+# OPTIONAL: Plotting counts for genes of interest
+
+```{r}
+i <- grep("CRISPLD2", res$symbol)
+res[i,]
+```
+
+```{r}
+d <- plotCounts(dds, gene = row.names(res[i,]), intgroup = "dex", returnData = T)
+boxplot(count ~ dex, data = d)
+```
+
+```{r}
+library(ggplot2)
+
+ggplot(d, aes(dex, count, fill = dex)) +
+  geom_boxplot() +
+  geom_point() +
+  scale_y_log10() +
+  ggtitle("CRISPLD2")
+```

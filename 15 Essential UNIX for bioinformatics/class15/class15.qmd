@@ -1,0 +1,32 @@
+---
+title: "class15"
+author: "Steven Gan"
+format: pdf
+editor: visual
+---
+
+## **10. Using RStudio online (or locally) to read your output**
+
+```{r}
+mm2.x.zebrafish <- read.table("mm-second.x.zebrafish.tsv")
+colnames(mm2.x.zebrafish) <- c("qseqid", "sseqid", "pident", "length", "mismatch", "gapopen",
+                               "qstart", "qend", "sstart", "send", "evalue", "bitscore")
+```
+
+```{r}
+hist(mm2.x.zebrafish$bitscore, breaks = 30)
+hist(mm2.x.zebrafish$pident)
+```
+
+```{r}
+mm2.x.zebrafish$a <- mm2.x.zebrafish$pident * 
+  (mm2.x.zebrafish$qend - mm2.x.zebrafish$qstart)
+plot(mm2.x.zebrafish$a, mm2.x.zebrafish$bitscore)
+```
+
+```{r}
+# install.packages("ggplot2")
+library(ggplot2)
+
+ggplot(mm2.x.zebrafish, aes(a, bitscore)) + geom_point(alpha = 0.1) + geom_smooth()
+```

@@ -1,0 +1,15 @@
+This is nothing more than a text editor.
+To save and I exit I can push Control-X.
+
+
+AWS digan_bggn213
+i-088378bde349363b6
+
+ssh -i "digan_bggn213.pem" ubuntu@ec2-34-210-49-2.us-west-2.compute.amazonaws.com
+
+
+
+
+AWS
+i-08f6a1140049381f2
+ssh -i digan_bggn213.pem ubuntu@ec2-35-92-31-1.us-west-2.compute.amazonaws.com 

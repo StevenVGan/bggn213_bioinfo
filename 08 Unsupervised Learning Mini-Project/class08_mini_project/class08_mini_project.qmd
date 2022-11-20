@@ -1,0 +1,579 @@
+---
+title: "class08_mini_project"
+author: "Steven Gan"
+format: html
+toc: true
+date: 2022-10-23
+theme:
+  light: faltly
+  dark: darkly
+---
+
+# Exploratory data analysis
+
+## Preparing the data
+
+```{r}
+fna.data <- "WisconsinCancer.csv"
+wisc.df <- read.csv(fna.data, row.names=1)
+
+head(wisc.df, 2)
+
+wisc.data <- wisc.df[,-1]
+
+diagnosis <- factor(wisc.df$diagnosis)
+```
+
+## Exploratory data analysis
+
+Q1:
+569 observations in this dataset.
+```{r}
+nrow(wisc.df)
+```
+
+Q2:
+212 observations have malignant diagnosis.
+```{r}
+sum(diagnosis == "M")
+# table(wisc.df$diagnosis)
+```
+
+Q3:
+10 features in the data have "_mean" suffix.
+```{r}
+length(grep("_mean", colnames(wisc.df)))
+# sum(grepl("_mean", colnames(wisc.df)))
+```
+
+# Principle component analysis (PCA)
+
+## Performing PCA
+
+```{r}
+colMeans(wisc.data)
+apply(wisc.data, 2, sd)
+```
+
+```{r}
+wisc.pr <- prcomp(wisc.data, scale = TRUE)
+summary(wisc.pr)
+```
+
+Q4:
+44.3% of the original variance is captured by the PC1.
+```{r}
+wisc.pr$sdev[1] ^ 2 / sum(wisc.pr$sdev ^ 2)
+```
+
+Q5:
+3 PCs are required for at least 70% of variance.
+```{r}
+var <- wisc.pr$sdev ^ 2 / sum(wisc.pr$sdev ^ 2)
+
+b = 0
+for (i in 1:length(var)) {
+  b <- b + var[i]
+  if(b > 0.7) {
+    print(i)
+    break
+  }
+}
+```
+
+Q6:
+7 PCs are required for at least 90% of variance.
+```{r}
+b = 0
+for (i in 1:length(var)) {
+  b <- b + var[i]
+  if(b > 0.9) {
+    print(i)
+    break
+  }
+}
+
+rm(b)
+```
+
+## Interpreting PCA results
+
+Q7:
+This is a mess. No distinguishable information and difficult to comprehend.
+```{r}
+biplot(wisc.pr)
+```
+
+```{r}
+plot(wisc.pr$x[,1], wisc.pr$x[,2], col = diagnosis, 
+     xlab = "PC1", ylab = "PC2")
+```
+Q8:
+PC1 and PC2 did a better job in separating samples with Malignant or Benign cancers than PC1 and PC3, where more Malignant and Benign dots mixed with each others. 
+```{r}
+plot(wisc.pr$x[,1], wisc.pr$x[,3], col = diagnosis , 
+     xlab = "PC1", ylab = "PC3")
+```
+
+```{r}
+df <- as.data.frame(wisc.pr$x)
+df$diagnosis <- diagnosis
+
+library(ggplot2)
+
+ggplot(df) + 
+  aes(PC1, PC2, col = diagnosis) + 
+  geom_point()
+```
+
+## Variance explained
+
+```{r}
+pr.var <- wisc.pr$sdev ^ 2
+head(pr.var)
+
+pve <- pr.var/ sum(pr.var)
+
+plot(pve, xlab = "Principal Component", 
+     ylab = "Proportion of Variance Explained", 
+     ylim = c(0, 1), type = "o")
+```
+
+```{r}
+barplot(pve, ylab = "Precent of Variance Explained",
+     names.arg = paste0("PC",1:length(pve)), las = 2, axes = FALSE)
+axis(2, at = pve, labels = round(pve, 2) * 100 )
+```
+
+```{r}
+# install.packages("factoextra")
+library(factoextra)
+
+fviz_eig(wisc.pr, addlabels = TRUE)
+```
+
+## Communicating PCA results
+
+Q9: 
+The "concave.points_mean" component of the loading vector of PC1.
+```{r}
+wisc.pr$rotation["concave.points_mean",1]
+```
+
+# Hierarchical clustering
+
+```{r}
+data.scaled <- scale(wisc.data)
+data.dist <- dist(data.scaled)
+
+wisc.hclust <- hclust(data.dist, "complete")
+```
+
+## Results of hierarchical clustering
+
+Q10:
+4 clusters appears at about height is 20.
+```{r}
+plot(wisc.hclust)
+abline(wisc.hclust, h = 20, col = "red", lty = 2)
+```
+
+## Selecting number of clusters
+
+```{r}
+wisc.hclust.clusters <- cutree(wisc.hclust, k = 4)
+table(wisc.hclust.clusters, diagnosis)
+```
+
+Q11:
+Analysis Results:
+From the evaluation table and the graph below, it can be easily shown that cutree at 4 is the best.
+
+Method:
+Take the two clusters with highest patients numbers as either the predicted M or B samples, based on the actual diagnosis results of these two clusters, denoted as "1" (clustered M) and "2" (clustered B). And all the rest clusters are considered as indecisive results, denoted as "3" (ind).
+
+Three values are used to judge the results in each case:
+~ False-negative rate (fnR): P{M|2} = P{M2} / P{2} = n{M2} / n{2}
+~ False-positive rate (fpR): P{B|1} = P{B1} / P{1} = n{B1} / n{1}
+~ Indecisive rate (indR): P{3} = n{3} / n{Total}
+
+```{r}
+library(dplyr)
+library(reshape2)
+
+# clusDiag funtion identify the specific clusters correspond to diagnosis
+clusDiag <- function(clusDiagTable, diag) {
+  arra <- clusDiagTable %>%
+    filter(diagnosis == diag) %>%
+    arrange(desc(Freq)) %>%
+    select(1) %>%
+    slice(1)
+  return(as.integer(arra))
+}
+
+# evaluation of fpR, fnR, and indR
+evalErr_hclust <- function(hclust, k){
+  hclust.clusters <- cutree(hclust, k = k)
+  compare <- as.data.frame(table(hclust.clusters, diagnosis))
+
+  clusM <- clusDiag(compare, "M")
+  clusB <- clusDiag(compare, "B")
+  
+  if (clusM == clusB) {
+    print(paste0("Unable to identify coresponding M/B clusters at cutree ", k))
+    print("Major cluster are mixed with M/B samples, as below:")
+    print(table(hclust.clusters, diagnosis)[clusB,])
+    return(c(NA, NA, NA))
+  }
+
+  nM2 = filter(compare, diagnosis == "M" & hclust.clusters == clusB)$Freq
+  nB1 = filter(compare, diagnosis == "B" & hclust.clusters == clusM)$Freq
+
+  n2 = sum(filter(compare, hclust.clusters == clusB)$Freq)
+  n1 = sum(filter(compare, hclust.clusters == clusM)$Freq)
+  n3 = sum(filter(compare, hclust.clusters != clusM 
+                & hclust.clusters != clusB)$Freq)
+
+  nTot = sum(compare$Freq)
+
+  fnR <- nM2 / n2 * 100
+  fpR <- nB1 / n1 * 100
+  indR <- n3 / nTot * 100
+  
+  values <- c(fnR = fnR, fpR = fpR, indR = indR)
+  return(values)
+}
+
+# evaluation with sequential cutree value k
+evalErr_hclust_k <- function(hclust, start_k, end_k) {
+  evalDf = NULL
+  for (i in start_k:end_k) {
+    values <- evalErr_hclust(hclust, i)
+    evalDf <- rbind(evalDf, values)
+    rownames(evalDf)[i - (start_k - 1)] = i
+  }
+  return(evalDf)
+}
+```
+
+
+Analysis:
+```{r}
+library(ggplot2)
+
+wisc.hc.evalDf <- evalErr_hclust_k(wisc.hclust, 2, 10)
+print(wisc.hc.evalDf)
+
+#plotting
+bar_hclust_eval <- function(hc.evalDf, range_y = 100) {
+  hc.evalDf <- melt(hc.evalDf)
+colnames(hc.evalDf) <- c("k", "type", "value")
+
+ggplot(hc.evalDf, aes(fill = type, y = value, x = k)) +
+  geom_bar(position = position_dodge(), stat = "identity") +
+  geom_line(stat="identity", aes(color = type, y = value, x = k)) +
+  labs(x = "Cutree k", y = "Rate value (%)") +
+  scale_x_discrete(
+    limits = factor(hc.evalDf$k[1]:hc.evalDf$k[length(hc.evalDf$k)])) +
+  scale_y_continuous(limits = c(0, range_y)) +
+  geom_text(aes(label = round(value, 2)), 
+            vjust = -0.5, position = position_dodge(0.9), size = 3) +
+  scale_fill_brewer(palette = "Paired") +
+  theme_minimal()
+}
+
+bar_hclust_eval(wisc.hc.evalDf, range_y = 20)
+```
+
+Q12:
+As shown below, method "single" and "average" failed in separating M and B samples, under any Cutree between 2 to 10, with most of their samples mixed in the main cluster, while all other clusters containing only a few samples.
+
+Both "ward.D2" and "complete" can separate B and M samples. The former separate samples Cutree of 2, while the later at 3. In comparing of error rate, however, "complete" method has an overall lower error rate, and false-negative rate, while has a relatively higher indecisive rate, due to 4 clusters it distinguished.
+
+```{r}
+# Analysis on different clustering methods
+hclust_evalErrAna <- function 
+(data.dist, start_k, end_k, 
+ method = c("complete", "single", "average", "ward.D2")) {
+  for (i in 1:length(method)) {
+    hclust.i <- hclust(data.dist, method[i])
+    plot(hclust.i)
+    
+    hc.evalDf.i <- evalErr_hclust_k(hclust.i, start_k, end_k)
+    
+    if (sum(!is.na(hc.evalDf.i)) == 0) {
+      print(paste0("No acceptable clusters for M/B separation under ", 
+                   method[i], "-based clustering analysis"))
+      next
+    }
+    print(bar_hclust_eval(hc.evalDf.i, range_y = 60))
+  }
+}
+
+hclust_evalErrAna(data.dist, 2, 10)
+```
+
+
+# Combining methods
+
+## Clustering on PCA results
+
+```{r}
+wisc.pr.hclust <- hclust(dist(wisc.pr$x[, 1:3]), "ward.D2")
+plot(wisc.pr.hclust)
+```
+
+```{r}
+grps <- cutree(wisc.pr.hclust, k = 2)
+table(grps)
+
+table(diagnosis, grps)
+```
+
+```{r}
+g <- as.factor(grps)
+levels(g)
+
+g <- relevel(g, 2)
+
+plot(wisc.pr$x[,1:2], col = g)
+plot(wisc.pr$x[,1:2], col = diagnosis)
+```
+
+
+```{r}
+library(rgl)
+
+plot3d(wisc.pr$x[,1:3], xlab = "PC1", ylab = "PC2", zlab = "PC3", 
+       cex = 1.5, size = 1, type = "s", col = grps)
+rglwidget(width = 400, height = 400)
+```
+
+```{r}
+## Use the distance along the first 7 PCs for clustering i.e. wisc.pr$x[, 1:7]
+wisc.pr.hclust <- hclust(dist(wisc.pr$x[, 1:7]), method = "ward.D2")
+wisc.pr.hclust.clusters <- cutree(wisc.pr.hclust, k = 2)
+```
+
+Q13:
+It works only a little bit better than hclust with 3 PCs, with only 52 incorrect assigned data in comparing to 57. 
+As shown in the Error rate graph, similar results can be obtained with cutree is 2. However, I would argue that this does not necessary guarantee that higher PCs for htclust should result in lower error rate, as the error rate in 30 PCs analysis is surprisingly higher than 3 and 7 PCs analysis.
+```{r}
+table(wisc.pr.hclust.clusters, diagnosis)
+
+#Analysis on different PCs
+for (i in c(3, 7, 30)) {
+  wisc.pr.hclust.i <- hclust(dist(wisc.pr$x[, 1:i]), method = "ward.D2")
+  wisc.pr.hc.evalDf.i <- evalErr_hclust_k(wisc.pr.hclust.i, 2, 5)
+  
+  if (sum(!is.na(wisc.pr.hc.evalDf.i)) == 0) {
+    print(paste0("No acceptable clusters for M/B separation under ", 
+                 method[i], "-based clustering analysis"))
+    next
+  }
+  
+  print(bar_hclust_eval(wisc.pr.hc.evalDf.i, range_y = 60))
+}
+```
+
+Q14:
+No significant difference to previous hclust data.
+```{r}
+table(wisc.hclust.clusters, diagnosis)
+```
+
+# Sensitivity/Specificity
+
+Q15:
+Based on the graph below, the best sensitivity, 88.68%, achieved at 7 PCs analysis using method "ward.D2" with Cutree at k = 2.
+The best specificity, however, if stick to the data, would be near 100% when cutree goes to about 10. Yet this is merely a play with the figures, as there will be only a few samples in the clusters when cutree reaches 10. Faily speaking, the highest specificity should be about 93.2%, achieved at 7 PCs clustering using "ward.D2" methods.
+
+
+Method: (Modify previous evaluation function)
+Sensitivity (senR): TP / TP + FN (M1 / M1 + M2)
+Specificity (speR): TN / TN + FN (B2 / B2 + M2)
+
+Generalized complete Functions:
+```{r}
+library(dplyr)
+library(reshape2)
+
+# clusDiag funtion identify the specific clusters correspond to diagnosis
+clusDiag <- function(clusDiagTable, diag) {
+  arra <- clusDiagTable %>%
+    filter(diagnosis == diag) %>%
+    arrange(desc(Freq)) %>%
+    select(1) %>%
+    slice(1)
+  return(as.integer(arra))
+}
+
+# evaluation of Sensitivity and Specificity or Error rate
+eval_hclust <- function (hclust, k, evalMethod, logs = F) {
+  
+  if (evalMethod != "SS" & evalMethod != "Err") 
+    {return(print("Error in evalMethod"))} 
+  
+  hclust.clusters <- cutree(hclust, k = k)
+  compare <- as.data.frame(table(hclust.clusters, diagnosis))
+
+  clusM <- clusDiag(compare, "M")
+  clusB <- clusDiag(compare, "B")
+  
+
+  if (clusM == clusB) {
+    if (logs == T) {
+      print(paste0("Unable to identify M/B clusters at cutree ", k))
+      print("Major cluster are mixed with M/B samples, as below:")
+      print(table(hclust.clusters, diagnosis)[clusB,])
+    }
+    if (evalMethod == "SS") {return(c(NA, NA))} 
+    if (evalMethod == "Err") {return(c(NA, NA, NA))}
+  }
+  
+  if (evalMethod == "SS") {
+    nM1 = filter(compare, diagnosis == "M" & hclust.clusters == clusM)$Freq
+    nB2 = filter(compare, diagnosis == "B" & hclust.clusters == clusB)$Freq
+  
+    nM = sum(filter(compare, diagnosis == "M")$Freq)
+    n2 = sum(filter(compare, hclust.clusters == clusB)$Freq)
+  
+    senR <- nM1 / nM * 100
+    speR <- nB2 / n2 * 100
+    
+    values <- c(senR = senR, speR = speR)
+    return(values)
+  }
+  
+  if (evalMethod == "Err") {
+    nM2 = filter(compare, diagnosis == "M" & hclust.clusters == clusB)$Freq
+    nB1 = filter(compare, diagnosis == "B" & hclust.clusters == clusM)$Freq
+  
+    n2 = sum(filter(compare, hclust.clusters == clusB)$Freq)
+    n1 = sum(filter(compare, hclust.clusters == clusM)$Freq)
+    n3 = sum(filter(compare, hclust.clusters != clusM 
+                  & hclust.clusters != clusB)$Freq)
+  
+    nTot = sum(compare$Freq)
+  
+    fnR <- nM2 / n2 * 100
+    fpR <- nB1 / n1 * 100
+    indR <- n3 / nTot * 100
+    
+    values <- c(fnR = fnR, fpR = fpR, indR = indR)
+    return(values)
+  }
+}
+
+# evaluation with sequential cutree value k
+eval_hclust_k <- function(hclust, start_k, end_k, evalMethod, logs = F) {
+  evalDf = NULL
+  for (i in start_k:end_k) {
+    values <- eval_hclust(hclust, i, evalMethod, logs)
+    evalDf <- rbind(evalDf, values)
+    rownames(evalDf)[i - (start_k - 1)] = i
+  }
+  return(evalDf)
+}
+
+#plotting
+bar_hclust_eval <- function(hc.evalDf, range_y = 100) {
+  hc.evalDf <- melt(hc.evalDf)
+colnames(hc.evalDf) <- c("k", "type", "value")
+
+ggplot(hc.evalDf, aes(fill = type, y = value, x = k)) +
+  geom_bar(position = position_dodge(), stat = "identity") +
+  geom_line(stat="identity", aes(color = type, y = value, x = k)) +
+  labs(x = "Cutree k", y = "Rate value (%)") +
+  scale_x_discrete(
+    limits = factor(hc.evalDf$k[1]:hc.evalDf$k[length(hc.evalDf$k)])) +
+  scale_y_continuous(limits = c(0, range_y)) +
+  geom_text(aes(label = round(value, 2)), 
+            vjust = -0.5, position = position_dodge(0.9), size = 3) +
+  scale_fill_brewer(palette = "Paired") +
+  theme_minimal()
+}
+
+# Analysis on different clustering methods
+hclust_evalAna <- function (
+    data.dist, start_k = 2, end_k = 10, 
+    method = c("complete", "single", "average", "ward.D2"), 
+    dendroPlot = F, evalMethod, logs = F, range_y = 100) {
+  
+  for (i in 1:length(method)) {
+    hclust.i <- hclust(data.dist, method[i])
+    if (dendroPlot == T) {plot(hclust.i)}
+    
+    hc.evalDf.i <- eval_hclust_k(hclust.i, start_k, end_k, evalMethod, logs)
+    
+    if (sum(!is.na(hc.evalDf.i)) == 0) {
+      print(paste0("No acceptable clusters for M/B separation under ", 
+                   method[i], "-based clustering analysis"))
+      next
+    }
+    print(paste0("Clustering Method: ", method[i]))
+    print(bar_hclust_eval(hc.evalDf.i, range_y))
+  }
+}
+
+#Analysis on different PCs
+hclustPCs_evalAna <- function (
+    pr, start_k = 2, end_k = 10, PCs = c(3, 7, 30), method = c("ward.D2"), 
+    dendroPlot = F, evalMethod, logs = F, range_y = 100) {
+  
+  for (i in PCs) {
+    for (j in 1:length(method)) {
+      pr.hclust.i <- hclust(dist(pr$x[, 1:i]), method[j])
+      if (dendroPlot == T) {plot(pr.hclust.i)}
+      pr.hc.evalDf.i <- eval_hclust_k(pr.hclust.i, start_k, end_k, 
+                                      evalMethod, logs)
+      
+      if (sum(!is.na(pr.hc.evalDf.i)) == 0) {
+        print(paste0("No acceptable clusters for M/B separation under Method: ", 
+                     method[j], " for ", i, " PCs"))
+        next
+      }
+      print(paste0("PCs: ", i, " Clustering method: ", method[j]))
+      print(bar_hclust_eval(pr.hc.evalDf.i, range_y))
+    }
+  }
+}
+```
+
+```{r}
+#Test 1: Q11
+#wisc.hclust %>%
+#  eval_hclust_k(2, 10, "Err") %>%
+#  bar_hclust_eval(range_y = 20)
+
+#Test 2: Q12
+#data.dist %>%
+#  hclust_evalAna(2, 10, dendroPlot = T, evalMethod = "Err", range_y = 60)
+
+#Test 3: Q13
+#wisc.pr %>%
+#  hclustPCs_evalAna(2, 5, evalMethod = "Err", range_y = 60)
+
+data.dist %>%
+  hclust_evalAna(2, 10, evalMethod = "SS")
+
+wisc.pr %>%
+  hclustPCs_evalAna(method = c("complete", "single", "average", "ward.D2"), evalMethod = "SS", logs = F)
+```
+
+# Prediction
+
+```{r}
+url <- "https://tinyurl.com/new-samples-CSV"
+new <- read.csv(url)
+npc <- predict(wisc.pr, newdata=new)
+npc
+```
+
+Q16:
+Based on the graph, patient 1 should be prioritized for follow up.
+```{r}
+plot(wisc.pr$x[,1:2], col = g)
+points(npc[,1], npc[,2], col = "blue", pch = 16, cex = 3)
+text(npc[,1], npc[,2], c(1,2), col = "white")
+```
