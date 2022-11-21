@@ -10,7 +10,7 @@ format: html
 
 ```{r}
 # install.packages("usethis")
-# library(usethis)
+library(usethis)
 create_github_token()
 ```
 
