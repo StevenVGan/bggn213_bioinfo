@@ -1,0 +1,333 @@
+---
+title: "class17"
+author: "Steven Gan"
+format: html
+toc: true
+date: 2022-11-23
+theme:
+  light: faltly
+  dark: darkly
+---
+
+# Getting Started
+
+```{r}
+vax <- read.csv("covid19vaccinesbyzipcode_test.csv")
+```
+
+Q1:
+
+persons_fully_vaccinated
+
+Q2:
+
+zip_code_tabulation_area
+
+Q3:
+
+```{r}
+sort(vax$as_of_date)[1]
+```
+
+Q4:
+
+```{r}
+sort(vax$as_of_date, decreasing = T)[1]
+```
+
+```{r}
+skimr::skim(vax)
+```
+
+Q5:
+
+13
+
+Q6:
+
+```{r}
+sum(is.na(vax$persons_fully_vaccinated))
+```
+
+Q7:
+
+```{r}
+per <- round(sum(is.na(vax$persons_fully_vaccinated)) / nrow(vax) * 100, 1)
+paste0(per, "%")
+```
+
+Q8:
+
+Possibly due to that data remained uncollected
+
+
+# Working with dates
+
+
+```{r}
+library(lubridate)
+
+today()
+```
+
+```{r}
+vax$as_of_date <- ymd(vax$as_of_date)
+
+vax$as_of_date[nrow(vax)] - vax$as_of_date[1]
+```
+
+Q9:
+
+```{r}
+today() - sort(vax$as_of_date, decreasing = T)[1]
+```
+
+Q10:
+
+```{r}
+length(unique(vax$as_of_date))
+```
+
+
+# Working with ZIP codes
+
+```{r}
+# install.packages("zipcodeR")
+library(zipcodeR)
+```
+
+```{r}
+geocode_zip('92037')
+```
+
+```{r}
+zip_distance('92037','92109')
+```
+
+```{r}
+reverse_zipcode(c('92037', "92109"))
+```
+
+```{r}
+zipdata <- reverse_zipcode(vax$zip_code_tabulation_area)
+```
+
+# OPTION: Plotting on the percentage of fully vacination
+
+```{r}
+# install.packages("maps")
+library(maps)
+library(ggplot2)
+```
+
+```{r}
+states <- map_data("state")
+ca_df <- subset(states, region == "california")
+counties <- map_data("county")
+ca_county <- subset(counties, region == "california")
+```
+
+```{r, message=FALSE}
+library(stringr)
+library(dplyr)
+```
+
+```{r}
+vax_county <- vax %>% 
+  filter(as_of_date == "2022-11-22") %>%
+  group_by(county) %>%
+  summarise(per = sum(persons_fully_vaccinated, na.rm = T) / 
+              sum(tot_population, na.rm = T)) %>%
+  na.omit() %>% 
+  `colnames<-`(c("subregion", "percent_fully_vax")) %>%
+  mutate_if(is.character, str_to_lower)
+
+cacopa <- inner_join(ca_county, vax_county, by = "subregion")
+```
+
+```{r}
+ditch_the_axes <- theme(
+  axis.text = element_blank(),
+  axis.line = element_blank(),
+  axis.ticks = element_blank(),
+  panel.border = element_blank(),
+  panel.grid = element_blank(),
+  axis.title = element_blank()
+  )
+
+ca_base <- ggplot(data = ca_df, mapping = aes(x = long, y = lat, group = group)) + 
+  coord_fixed(1.3) + 
+  geom_polygon(color = "black", fill = "gray")
+
+elbow_room1 <- ca_base + 
+      geom_polygon(data = cacopa, aes(fill = percent_fully_vax), color = "white") +
+      geom_polygon(color = "black", fill = NA) +
+      theme_bw() +
+      ditch_the_axes
+
+elbow_room1
+
+eb2 <- elbow_room1 + 
+    scale_fill_gradientn(colours = rev(rainbow(7)),
+                         breaks = c(2, 4, 10, 100, 1000, 10000),
+                         trans = "log10")
+eb2
+```
+
+# Focus on the San Diego area
+
+```{r}
+sd <- vax %>% filter(county == "San Diego")
+nrow(sd)
+```
+
+```{r}
+sd.10 <- vax %>%
+  filter(county == "San Diego" & age5_plus_population > 10000)
+```
+
+Q11:
+
+```{r}
+sd %>%
+  pull(zip_code_tabulation_area) %>%
+  unique() %>%
+  length()
+```
+
+Q12:
+
+```{r}
+sd %>%
+  arrange(desc(age12_plus_population)) %>%
+  filter(row_number() == 1) %>%
+  pull(zip_code_tabulation_area)
+```
+
+Q13:
+
+```{r}
+sd_20221115 <- sd %>% filter(as_of_date == ymd("2022-11-15"))
+
+sd_20221115 %>%
+  summarise(per = sum(persons_fully_vaccinated, na.rm = T) / 
+              sum(tot_population, na.rm = T) * 100)
+```
+
+Q14: 
+
+```{r}
+hist(sd_20221115$percent_of_population_fully_vaccinated, 
+     xlab = "Percent of Population Fully Vaccinated on 2022-11-15",
+     main = "Histogram of Vaccination Rates Accross San Diego County")
+```
+
+```{r}
+ggplot(sd_20221115) + aes(percent_of_population_fully_vaccinated) +
+  geom_histogram(bins = 12) +
+  labs(x = "Percent of Population Fully Vaccinated in a Zip Code Area",
+       y = "Count (Zip code areas)",
+       title = "Histogram of Vaccination Rates Accross San Diego County",
+       subtitle = "As of 2022-11-15")
+```
+
+## Focus on UCSD/La Jolla
+
+```{r}
+ucsd <- sd %>%
+  filter(zip_code_tabulation_area == "92037")
+ucsd[1,]$age5_plus_population
+```
+
+Q15:
+
+```{r}
+a <- ggplot(ucsd) + 
+  aes(as_of_date, percent_of_population_fully_vaccinated) +
+  geom_point() +
+  geom_line() +
+  ylim(c(0, 1)) +
+  labs(x = "Date", y = "Percent Vaccinated",
+       title = "Vaccination rate for La Jolla CA 92037")
+
+a
+```
+
+## Comparing to similar sized areas
+
+```{r}
+vax.36 <- vax %>%
+  filter(age5_plus_population > 36144 & as_of_date == "2022-11-15")
+```
+
+Q16:
+
+```{r}
+mean_per_full <- vax.36 %>%
+  summarise(Mean_per_full = sum(persons_fully_vaccinated) / sum(tot_population))
+
+a + geom_hline(yintercept = as.numeric(mean_per_full),
+               linetype = "dotted", col = "red")
+```
+
+Q17:
+
+```{r}
+vax.36 %>%
+  summarise(Min = min(percent_of_population_fully_vaccinated), 
+            fQu = quantile(percent_of_population_fully_vaccinated, probs = c(0.25)),
+            Median = median(percent_of_population_fully_vaccinated),
+            Mean = mean(percent_of_population_fully_vaccinated), 
+            tQu = quantile(percent_of_population_fully_vaccinated, probs = c(0.75)),
+            Max = max(percent_of_population_fully_vaccinated))
+```
+
+Q18:
+
+```{r}
+ggplot(vax.36) + aes(percent_of_population_fully_vaccinated) +
+  geom_histogram() +
+  xlim(c(0, 1)) +
+  labs(x = "Percent Vaccinated", y = "Count")
+```
+
+Q19:
+
+```{r}
+vax %>% 
+  filter(as_of_date == "2022-11-15") %>%  
+  filter(zip_code_tabulation_area == "92040") %>%
+  select(percent_of_population_fully_vaccinated)
+```
+Below the average value
+
+Q20:
+
+```{r}
+vax.36.all <- vax %>%
+  filter(age5_plus_population > 36144)
+
+ggplot(vax.36.all) + aes(as_of_date, percent_of_population_fully_vaccinated,
+                         group = zip_code_tabulation_area) + 
+  geom_line(alpha = 0.2, col = "blue") +
+  ylim(c(0, 1)) +
+  labs(x = "Date", y = "Percent Vaccinated",
+       title = "Vaccination rate accross California",
+       subtitle = "Areas with a population above 36k are shown") +
+  geom_hline(yintercept = as.numeric(mean_per_full), linetype = "dotted")
+```
+
+Q21: 
+
+Highly agree!
+
+
+
+
+
+
+
+
+
+
+
