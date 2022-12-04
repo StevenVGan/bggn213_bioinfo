@@ -1,0 +1,28 @@
+---
+title: "find_a_gene"
+author: "Steven Gan"
+format: html
+---
+
+# Q7
+
+```{r}
+library(bio3d)
+
+align <- read.fasta("seqdump.fasta")
+seqid <- seqidentity(align)
+
+heatmap(log(seqid + 1) ^ (-1), cexRow = 1, cexCol = 1, margins = c(10, 10))
+```
+
+```{r}
+sort(rowSums(seqid), decreasing = T)[1]
+
+consen <- read.fasta("Aligned Consensus.fa")
+
+blastCon <- blast.pdb(consen)
+
+pdb.annotate(c("6QNX_C", "5YEF_A", "5T0U_A"))
+```
+
+
