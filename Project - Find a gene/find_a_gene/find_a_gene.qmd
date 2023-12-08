@@ -12,7 +12,15 @@ library(bio3d)
 align <- read.fasta("seqdump.fasta")
 seqid <- seqidentity(align)
 
-heatmap(log(seqid + 1) ^ (-1), cexRow = 1, cexCol = 1, margins = c(10, 10))
+# Increase the outer top margin to provide more space for the title
+par(oma=c(0,0,3,0))
+
+# Your heatmap code here
+heatmap(log(seqid + 1) ^ (-1), cexRow = 1, cexCol = 1, margins = c(10, 10), scale = "none")
+
+# Add the title with increased space
+title(main = "My Heatmap Title", cex.main = 1, outer = TRUE)
+
 ```
 
 ```{r}
